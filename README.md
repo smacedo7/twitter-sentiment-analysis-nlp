@@ -63,8 +63,10 @@ twitter-sentiment-analysis-nlp/
 │   └── sentiment_classifier.pkl
 ├── requirements.txt
 └── README.md
+```
 
-Workflow
+## Workflow
+
 1. Load and explore the Sentiment140 dataset.
 2. Clean tweet text by removing links, mentions, punctuation, and special characters.
 3. Normalize text using lowercase conversion, tokenization, and stopword removal.
@@ -72,43 +74,80 @@ Workflow
 5. Train classification models.
 6. Evaluate model performance using classification metrics.
 7. Save the best model for future predictions.
-Models
+
+## Models
+
 The project compares machine learning models such as:
+
 - Logistic Regression
 - Multinomial Naive Bayes
 - Linear Support Vector Machine
+
 The best-performing model is selected based on evaluation metrics and validation results.
-Evaluation Metrics
+
+## Evaluation Metrics
+
 The models are evaluated using:
+
 - Accuracy
 - Precision
 - Recall
 - F1-score
 - Confusion Matrix
-Final metrics will be added after the training pipeline is completed and validated.
 
-Example Prediction
+> Final metrics will be added after the training pipeline is completed and validated.
+
+## Example Prediction
+
+```python
 predict_sentiment("I love how easy this application is to use!")
+```
+
 Expected output:
+
+```text
 Positive
-Installation
+```
+
+## Installation
+
 Clone the repository:
-git clone https://github.com/YOUR_USERNAME/twitter-sentiment-analysis-nlp.git
+
+```bash
+git clone git@github.com:smacedo7/twitter-sentiment-analysis-nlp.git
 cd twitter-sentiment-analysis-nlp
+```
+
 Create and activate a virtual environment:
+
+```bash
 python -m venv .venv
 source .venv/bin/activate
+```
+
 Install the dependencies:
+
+```bash
 pip install -r requirements.txt
+```
+
 Run the notebook:
+
+```bash
 jupyter notebook
-Future Improvements
+```
+
+## Future Improvements
+
 - Deploy an interactive interface using Streamlit
 - Add neutral sentiment classification
 - Test transformer-based models such as BERT
 - Create a REST API for real-time predictions
 - Integrate sentiment monitoring dashboards
 
-Author
+## Author
+
 Samuel Macedo
-LinkedIn · GitHub
+
+- [LinkedIn](https://www.linkedin.com/in/samuelmacedoo/)
+- [GitHub](https://github.com/smacedo7)
