@@ -105,6 +105,11 @@ def main() -> None:
     parser.add_argument("text", nargs="*", help="Tweet text. If omitted, starts the interactive mode.")
     args = parser.parse_args()
 
+    try:
+        load_model()
+    except FileNotFoundError as error:
+        raise SystemExit(error)
+
     if args.text:
         _print_prediction(" ".join(args.text))
         return
