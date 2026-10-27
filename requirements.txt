@@ -1,0 +1,20 @@
+# Data and machine learning
+pandas>=2.2
+numpy>=1.26
+scikit-learn>=1.4
+joblib>=1.3
+
+# Visualization
+matplotlib>=3.8
+seaborn>=0.13
+
+# Notebook
+notebook>=7.0
+
+# REST API
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+
+# Web interface
+streamlit>=1.33
