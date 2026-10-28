@@ -69,7 +69,8 @@ twitter-sentiment-analysis-nlp/
 │   ├── train.py                  # trains, compares and saves the models
 │   ├── predict.py                # prediction functions and CLI
 │   ├── batch.py                  # prediction for whole tables (used by the web app)
-│   └── error_analysis.py         # studies where the model makes mistakes
+│   ├── error_analysis.py         # studies where the model makes mistakes
+│   └── transformer_baseline.py   # compares the classic model with DistilBERT
 ├── models/
 │   ├── sentiment_classifier.pkl  # created by src/train.py (not versioned)
 │   └── metrics.json              # created by src/train.py
@@ -186,7 +187,16 @@ python -m src.error_analysis
 
 Writes `reports/error_analysis.md` (error rate by tweet length, by confidence and by word, plus the most confident mistakes) and `reports/error_examples.csv`. @handles and links are masked.
 
-### 5. Predict
+### 5. Compare with a transformer (optional)
+
+```bash
+pip install -r requirements-transformers.txt
+python -m src.transformer_baseline
+```
+
+Runs a pretrained DistilBERT model on the same test tweets as the classic model and saves `reports/transformer_comparison.json`.
+
+### 6. Predict
 
 ```python
 from src.predict import predict_sentiment
@@ -289,7 +299,7 @@ The tests use a small synthetic dataset (`tests/fixtures/sample_tweets.csv`), so
 ## Future Improvements
 
 - Add neutral sentiment classification
-- Test transformer-based models such as BERT
+- Fine-tune a transformer model such as BERT on Sentiment140
 - Integrate sentiment monitoring dashboards
 
 ## Author
