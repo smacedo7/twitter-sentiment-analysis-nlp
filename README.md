@@ -2,7 +2,7 @@
 
 An end-to-end Natural Language Processing project for classifying the sentiment of tweets using the Sentiment140 dataset.
 
-The project applies text preprocessing and machine learning techniques to predict whether a tweet expresses a negative or positive sentiment.
+The project applies text preprocessing and machine learning techniques to predict whether a tweet expresses a negative or positive sentiment, and exposes the trained model through a REST API and a web interface.
 
 ## Overview
 
@@ -13,12 +13,14 @@ The goal is to build and evaluate a sentiment classifier capable of identifying 
 ## Features
 
 - Text cleaning and normalization
-- Tokenization and stopword removal
+- Tokenization and stopword removal (negation words are preserved)
 - Exploratory Data Analysis (EDA)
 - Feature extraction with TF-IDF
 - Sentiment classification with machine learning models
 - Model evaluation using accuracy, precision, recall, F1-score, and confusion matrix
 - Interactive prediction for custom tweets
+- REST API for real-time predictions (FastAPI)
+- Web interface for single tweets and CSV files (Streamlit)
 
 ## Dataset
 
@@ -42,26 +44,40 @@ For this project, the labels are converted into a binary classification format:
 - Pandas
 - NumPy
 - Scikit-learn
-- NLTK
 - Matplotlib
 - Seaborn
 - Jupyter Notebook
+- FastAPI, Uvicorn and Pydantic
+- Streamlit
+- Pytest
 
 ## Project Structure
 
 ```text
 twitter-sentiment-analysis-nlp/
 ├── data/
-│   └── sentiment140.csv
+│   └── sentiment140.csv          # created by src/download_data.py (not versioned)
 ├── notebooks/
-│   └── sentiment_analysis.ipynb
+│   └── sentiment_analysis.ipynb  # exploratory data analysis
 ├── src/
-│   ├── preprocessing.py
-│   ├── train.py
-│   └── predict.py
+│   ├── api/
+│   │   ├── main.py               # FastAPI application
+│   │   └── schemas.py            # request/response models
+│   ├── config.py                 # paths and constants
+│   ├── download_data.py          # downloads and prepares Sentiment140
+│   ├── preprocessing.py          # text cleaning pipeline
+│   ├── train.py                  # trains, compares and saves the models
+│   ├── predict.py                # prediction functions and CLI
+│   └── batch.py                  # prediction for whole tables (used by the web app)
 ├── models/
-│   └── sentiment_classifier.pkl
+│   ├── sentiment_classifier.pkl  # created by src/train.py (not versioned)
+│   └── metrics.json              # created by src/train.py
+├── reports/
+│   └── confusion_matrix.png      # created by src/train.py
+├── tests/
+├── streamlit_app.py              # web interface
 ├── requirements.txt
+├── requirements-dev.txt
 └── README.md
 ```
 
@@ -83,7 +99,7 @@ The project compares machine learning models such as:
 - Multinomial Naive Bayes
 - Linear Support Vector Machine
 
-The best-performing model is selected based on evaluation metrics and validation results.
+The best-performing model (highest F1-score on the held-out test set) is saved automatically.
 
 ## Evaluation Metrics
 
@@ -95,19 +111,9 @@ The models are evaluated using:
 - F1-score
 - Confusion Matrix
 
-> Final metrics will be added after the training pipeline is completed and validated.
+After training, the results of every model are saved to `models/metrics.json` and the confusion matrix of the best model to `reports/confusion_matrix.png`.
 
-## Example Prediction
-
-```python
-predict_sentiment("I love how easy this application is to use!")
-```
-
-Expected output:
-
-```text
-Positive
-```
+> Final metrics will be added here after the training pipeline is run on the full dataset.
 
 ## Installation
 
@@ -131,18 +137,131 @@ Install the dependencies:
 pip install -r requirements.txt
 ```
 
-Run the notebook:
+To also run the tests, install the development dependencies instead:
 
 ```bash
-jupyter notebook
+pip install -r requirements-dev.txt
 ```
+
+## Usage
+
+Run every command from the project root.
+
+### 1. Prepare the dataset
+
+```bash
+python -m src.download_data
+```
+
+This downloads Sentiment140 and saves `data/sentiment140.csv` with the columns `target` (0/1) and `text`.
+If you already have the original CSV (for example from Kaggle), convert it with:
+
+```bash
+python -m src.download_data --raw-csv path/to/training.1600000.processed.noemoticon.csv
+```
+
+### 2. Explore the data
+
+```bash
+jupyter notebook notebooks/sentiment_analysis.ipynb
+```
+
+### 3. Train the models
+
+```bash
+python -m src.train                    # 200,000-tweet sample (fast)
+python -m src.train --sample-size 0    # full dataset (slower)
+```
+
+### 4. Predict
+
+```python
+from src.predict import predict_sentiment
+
+predict_sentiment("I love how easy this application is to use!")
+```
+
+Expected output:
+
+```text
+Positive
+```
+
+From the terminal:
+
+```bash
+python -m src.predict "I love how easy this application is to use!"
+python -m src.predict                  # interactive mode
+```
+
+## REST API
+
+Start the server:
+
+```bash
+uvicorn src.api.main:app --reload
+```
+
+Interactive documentation is available at <http://127.0.0.1:8000/docs>.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Checks the API status and whether the trained model is available |
+| POST | `/predict` | Predicts the sentiment of one tweet |
+| POST | `/predict/batch` | Predicts the sentiment of up to 100 tweets |
+
+Single prediction:
+
+```bash
+curl -X POST http://127.0.0.1:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"text": "I love how easy this application is to use!"}'
+```
+
+```json
+{"label": "Positive", "confidence": 0.93}
+```
+
+Batch prediction:
+
+```bash
+curl -X POST http://127.0.0.1:8000/predict/batch \
+  -H "Content-Type: application/json" \
+  -d '{"texts": ["I love this!", "Worst service ever."]}'
+```
+
+```json
+{
+  "predictions": [
+    {"label": "Positive", "confidence": 0.91},
+    {"label": "Negative", "confidence": 0.88}
+  ]
+}
+```
+
+Texts with no analyzable words (only links, mentions or symbols) return `422` on `/predict` and `null` values on `/predict/batch`. If the model has not been trained yet, the prediction endpoints return `503`.
+
+## Web Interface
+
+```bash
+streamlit run streamlit_app.py
+```
+
+- **Single tweet**: type a tweet (or pick an example) and see the predicted sentiment with its confidence.
+- **CSV file**: upload a file with a column of tweets, see the sentiment counts and download the results.
+
+## Tests
+
+```bash
+pytest
+```
+
+The tests use a small synthetic dataset (`tests/fixtures/sample_tweets.csv`), so they run in seconds and do not need the real Sentiment140 file.
 
 ## Future Improvements
 
-- Deploy an interactive interface using Streamlit
 - Add neutral sentiment classification
 - Test transformer-based models such as BERT
-- Create a REST API for real-time predictions
 - Integrate sentiment monitoring dashboards
 
 ## Author
