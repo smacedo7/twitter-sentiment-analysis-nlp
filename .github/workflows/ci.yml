@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.12"]
+        python-version: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -36,8 +36,12 @@ jobs:
       - name: Check /health
         run: |
           for i in $(seq 1 30); do
-            if curl -fs http://localhost:8000/health; then echo; exit 0; fi
+            if curl -fs http://localhost:8000/health; then echo; break; fi
             sleep 2
           done
-          docker logs api
-          exit 1
+          curl -fs http://localhost:8000/health | grep -q '"model_loaded":true' || { docker logs api; exit 1; }
+      - name: Check /predict
+        run: |
+          curl -fs -X POST http://localhost:8000/predict \
+            -H "Content-Type: application/json" \
+            -d '{"text": "I love this so much, best day ever!"}' | tee /dev/stderr | grep -q '"Positive"'

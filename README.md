@@ -8,7 +8,37 @@ The project applies text preprocessing and machine learning techniques to predic
 
 Social media contains a large amount of public opinion data. This project explores how Natural Language Processing can be used to transform raw tweets into useful sentiment insights.
 
-The goal is to build and evaluate a sentiment classifier capable of identifying the emotional polarity of a tweet.
+It covers the whole life of a machine learning project: data preparation, model comparison, error analysis, a REST API, a web interface, automated tests, continuous integration and Docker.
+
+## Results
+
+Trained on the full Sentiment140 dataset (1,590,670 tweets after cleaning; 80% for training, 20% for testing, stratified, `random_state=42`):
+
+| Model | Accuracy | Precision | Recall | F1-score |
+|-------|---------:|----------:|-------:|---------:|
+| **Logistic Regression** (selected) | **80.6%** | 79.8% | 81.9% | **80.9%** |
+| Linear SVM | 80.0% | 79.1% | 81.5% | 80.3% |
+| Multinomial Naive Bayes | 78.7% | 78.7% | 78.6% | 78.7% |
+
+All models use the same TF-IDF features (unigrams and bigrams, up to 100,000 terms). Results are saved in `models/metrics.json`, and the confusion matrix is in `reports/confusion_matrix.png`.
+
+![Confusion matrix](reports/confusion_matrix.png)
+
+### What the error analysis showed
+
+The full report is in [`reports/error_analysis.md`](reports/error_analysis.md). The main findings:
+
+- **The model knows when it is unsure.** When its confidence is above 90%, it is wrong only 4.9% of the time. When it is between 50% and 60%, it is wrong 44.2% of the time. The confidence shown in the API and in the web interface is therefore a useful signal.
+- **Longer tweets are harder.** The error rate grows from 16.8% (1-3 words) to 23.8% (13+ words after cleaning), probably because long tweets mix positive and negative ideas.
+- **Many "mistakes" are label noise.** Sentiment140 labels were assigned automatically from emoticons, not by people. Among the most confident mistakes are tweets like "I miss you", which the model reads as negative, but which were labeled positive because they came with a smiling emoticon. That is a limit of the dataset, not only of the model.
+- **Errors are balanced.** 32,956 negative tweets were predicted as positive and 28,695 positive tweets as negative, so the model is not strongly biased towards one class.
+
+### Limitations
+
+- Sarcasm and irony are hard for a bag-of-words model ("Great, another Monday..." is classified as positive).
+- Sentiment140 has only two classes, so there is no neutral sentiment.
+- The data is from 2009: slang and topics have changed since then.
+- A pretrained transformer comparison is implemented in `src/transformer_baseline.py`, but it has not been run yet, so no result is reported here.
 
 ## Features
 
@@ -72,10 +102,12 @@ twitter-sentiment-analysis-nlp/
 │   ├── error_analysis.py         # studies where the model makes mistakes
 │   └── transformer_baseline.py   # compares the classic model with DistilBERT
 ├── models/
-│   ├── sentiment_classifier.pkl  # created by src/train.py (not versioned)
+│   ├── sentiment_classifier.pkl  # trained model (versioned so the demo works)
 │   └── metrics.json              # created by src/train.py
 ├── reports/
-│   └── confusion_matrix.png      # created by src/train.py
+│   ├── confusion_matrix.png      # created by src/train.py
+│   ├── error_analysis.md         # created by src/error_analysis.py
+│   └── error_examples.csv        # most confident mistakes (handles masked)
 ├── tests/
 ├── Dockerfile
 ├── render.yaml                   # Render deploy configuration
@@ -119,9 +151,9 @@ The models are evaluated using:
 
 After training, the results of every model are saved to `models/metrics.json` and the confusion matrix of the best model to `reports/confusion_matrix.png`.
 
-> Final metrics will be added here after the training pipeline is run on the full dataset.
-
 ## Installation
+
+Python 3.12 or newer is recommended (the versioned model was trained with scikit-learn 1.9.1).
 
 Clone the repository:
 
