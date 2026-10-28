@@ -21,6 +21,7 @@ import numpy as np
 from sklearn.pipeline import Pipeline
 
 from src.config import LABELS, MODEL_PATH
+from src.neutral import NEUTRAL_LABEL, is_neutral
 from src.preprocessing import preprocess_text
 
 
@@ -49,28 +50,43 @@ def positive_probability(model: Pipeline, cleaned_texts: list[str]) -> np.ndarra
     return 1 / (1 + np.exp(-distance))
 
 
-def _build_result(positive_probability: float) -> dict:
-    label = LABELS[int(positive_probability >= 0.5)]
+def neutral_margin(model) -> float:
+    """Margin saved together with the model by ``src.train`` (0 means: never answer Neutral)."""
+    return float(getattr(model, "neutral_margin", 0.0))
+
+
+def _build_result(positive_probability: float, margin: float = 0.0) -> dict:
+    if is_neutral(positive_probability, margin):
+        label = NEUTRAL_LABEL
+    else:
+        label = LABELS[int(positive_probability >= 0.5)]
     confidence = max(positive_probability, 1 - positive_probability)
-    return {"label": label, "confidence": round(float(confidence), 4)}
+    return {
+        "label": label,
+        "confidence": round(float(confidence), 4),
+        "positive_probability": round(float(positive_probability), 4),
+    }
 
 
 def predict_batch(texts: list[str], model_path: Path = MODEL_PATH) -> list[dict]:
     """Predict many tweets at once.
 
-    Returns one ``{"label": ..., "confidence": ...}`` dict per input, in the same order.
+    Returns one dict per input, in the same order, with ``label`` ("Positive", "Negative" or
+    "Neutral" when the model is not sure), ``confidence`` (how sure the model is about the more
+    likely side, between 0.5 and 1) and ``positive_probability`` (calibrated, between 0 and 1).
     Texts with nothing left after cleaning (only links, mentions, symbols...) cannot be
-    analyzed, so they get ``{"label": None, "confidence": None}``.
+    analyzed, so they get ``None`` values.
     """
     model = load_model(model_path)
     cleaned = [preprocess_text(text) for text in texts]
     valid_positions = [i for i, text in enumerate(cleaned) if text]
 
-    results: list[dict] = [{"label": None, "confidence": None} for _ in texts]
+    results: list[dict] = [{"label": None, "confidence": None, "positive_probability": None} for _ in texts]
+    margin = neutral_margin(model)
     if valid_positions:
         probabilities = positive_probability(model, [cleaned[i] for i in valid_positions])
         for position, probability in zip(valid_positions, probabilities):
-            results[position] = _build_result(float(probability))
+            results[position] = _build_result(float(probability), margin)
     return results
 
 
@@ -87,7 +103,7 @@ def predict_detailed(text: str, model_path: Path = MODEL_PATH) -> dict:
 
 
 def predict_sentiment(text: str, model_path: Path = MODEL_PATH) -> str:
-    """Predict one tweet and return only the label: 'Positive' or 'Negative'."""
+    """Predict one tweet and return only the label: 'Positive', 'Negative' or 'Neutral'."""
     return predict_detailed(text, model_path)["label"]
 
 

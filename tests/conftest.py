@@ -18,5 +18,6 @@ def model_path(tmp_path_factory) -> Path:
         model_path=path,
         metrics_path=out / "metrics.json",
         reports_dir=out / "reports",
+        target_accuracy=0.0,  # margin 0: these tests expect a Positive/Negative answer (Neutral has its own tests)
     )
     return path

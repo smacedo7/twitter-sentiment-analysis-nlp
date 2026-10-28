@@ -29,15 +29,19 @@ class BatchRequest(BaseModel):
 
 
 class PredictionResponse(BaseModel):
-    label: Literal["Positive", "Negative"]
-    confidence: float = Field(ge=0.5, le=1.0, description="How sure the model is about the label (0.5 to 1.0).")
+    label: Literal["Positive", "Negative", "Neutral"] = Field(
+        description="`Neutral` means the model is not sure (mixed or ambiguous sentiment)."
+    )
+    confidence: float = Field(ge=0.5, le=1.0, description="How sure the model is about the more likely side (0.5 to 1.0).")
+    positive_probability: float = Field(ge=0.0, le=1.0, description="Calibrated probability that the tweet is positive.")
 
 
 class BatchItem(BaseModel):
-    label: Literal["Positive", "Negative"] | None = Field(
+    label: Literal["Positive", "Negative", "Neutral"] | None = Field(
         description="`null` when the text has no analyzable words (only links, mentions or symbols)."
     )
     confidence: float | None = Field(ge=0.5, le=1.0)
+    positive_probability: float | None = Field(ge=0.0, le=1.0)
 
 
 class BatchResponse(BaseModel):

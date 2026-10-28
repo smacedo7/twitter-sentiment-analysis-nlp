@@ -25,7 +25,7 @@ def test_mask_personal_data():
 
 def test_train_saves_predictions_with_expected_columns(predictions_path):
     df = pd.read_csv(predictions_path)
-    assert list(df.columns) == ["text", "clean_text", "target", "predicted", "positive_probability"]
+    assert list(df.columns) == ["text", "clean_text", "target", "predicted", "positive_probability", "is_neutral"]
     assert df["positive_probability"].between(0, 1).all()
 
 

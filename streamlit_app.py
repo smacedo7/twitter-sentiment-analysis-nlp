@@ -32,7 +32,7 @@ def load_metrics() -> dict | None:
 def render_sidebar() -> None:
     st.sidebar.header("About")
     st.sidebar.write(
-        "Classifies tweets as **Positive** or **Negative** with a model trained on the "
+        "Classifies tweets as **Positive**, **Negative** or **Neutral** (when the model is not sure) with a model trained on the "
         "[Sentiment140](http://help.sentiment140.com/for-students) dataset."
     )
 
@@ -48,9 +48,11 @@ def render_sidebar() -> None:
 def show_result(result: dict) -> None:
     if result["label"] == "Positive":
         st.success("Positive")
-    else:
+    elif result["label"] == "Negative":
         st.error("Negative")
-    st.progress(result["confidence"], text=f"Confidence: {result['confidence']:.1%}")
+    else:
+        st.info("Neutral: the model is not sure whether this tweet is positive or negative.")
+    st.progress(result["positive_probability"], text=f"Probability of being positive: {result['positive_probability']:.1%}")
 
 
 def set_example(text: str) -> None:
@@ -116,9 +118,10 @@ def render_batch_tab() -> None:
         return
 
     counts = results[LABEL_COLUMN].value_counts()
-    left, right, skipped = st.columns(3)
-    left.metric("Positive", int(counts.get("Positive", 0)))
-    right.metric("Negative", int(counts.get("Negative", 0)))
+    positive, neutral, negative, skipped = st.columns(4)
+    positive.metric("Positive", int(counts.get("Positive", 0)))
+    neutral.metric("Neutral", int(counts.get("Neutral", 0)))
+    negative.metric("Negative", int(counts.get("Negative", 0)))
     skipped.metric("Not analyzable", int(results[LABEL_COLUMN].isna().sum()))
 
     st.bar_chart(counts)

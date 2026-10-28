@@ -1,6 +1,7 @@
 import joblib
 import pytest
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
 
@@ -15,7 +16,7 @@ def test_predict_sentiment_returns_label(model_path):
 def test_predict_detailed_returns_label_and_confidence(model_path):
     result = predict_detailed("so happy with my new phone", model_path)
 
-    assert set(result) == {"label", "confidence"}
+    assert set(result) == {"label", "confidence", "positive_probability"}
     assert result["label"] == "Positive"
     assert 0.5 <= result["confidence"] <= 1.0
 
@@ -54,3 +55,22 @@ def test_models_without_predict_proba_are_supported(tmp_path):
 
     assert result["label"] == "Positive"
     assert 0.5 <= result["confidence"] <= 1.0
+
+
+def test_uncertain_tweets_become_neutral_when_model_has_a_margin(tmp_path):
+    texts = ["love great happy", "hate awful sad", "wonderful amazing", "terrible worst bad"]
+    pipeline = Pipeline([("tfidf", TfidfVectorizer()), ("clf", LogisticRegression())]).fit(texts, [1, 0, 1, 0])
+    path = tmp_path / "lr.pkl"
+
+    # Without a margin the model always chooses a side...
+    joblib.dump(pipeline, path)
+    assert predict_detailed("love", path)["label"] in {"Positive", "Negative"}
+
+    # ...with a huge margin everything the model is not extremely sure about becomes Neutral.
+    load_model.cache_clear()
+    pipeline.neutral_margin = 0.49
+    joblib.dump(pipeline, path)
+    result = predict_detailed("love", path)
+    assert result["label"] == "Neutral"
+    assert 0.0 <= result["positive_probability"] <= 1.0
+    load_model.cache_clear()

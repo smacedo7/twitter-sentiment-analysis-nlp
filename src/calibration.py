@@ -68,7 +68,10 @@ def calibration_metrics(y_true, probability) -> dict:
 
 def fit_calibrator(model, x_cal, y_cal, method: str) -> CalibratedClassifierCV:
     """Learn a calibration map for an already trained model (the model itself is frozen)."""
-    calibrated = CalibratedClassifierCV(FrozenEstimator(model), method=method)
+    # The calibration map is learned on cross-validated folds; tiny datasets need fewer folds.
+    smallest_class = int(pd.Series(np.asarray(y_cal)).value_counts().min())
+    folds = max(2, min(5, smallest_class))
+    calibrated = CalibratedClassifierCV(FrozenEstimator(model), method=method, cv=folds)
     return calibrated.fit(x_cal, y_cal)
 
 

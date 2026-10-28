@@ -35,11 +35,14 @@ from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
 
 from src.config import BEST_PARAMS_PATH, DATA_PATH, LABELS, METRICS_PATH, MODEL_PATH, RANDOM_STATE, REPORTS_DIR
+from src.calibration import calibration_metrics, reliability_curve, save_reliability_diagram, select_calibration
+from src.neutral import DEFAULT_TARGET_ACCURACY, choose_margin, is_neutral, margin_tradeoff
 from src.predict import positive_probability
 from src.preprocessing import preprocess_series
 
 DEFAULT_SAMPLE_SIZE = 200_000
 DEFAULT_TEST_SIZE = 0.2
+CALIBRATION_FRACTION = 0.1  # share of the training set kept aside to calibrate probabilities
 
 
 def load_dataset(data_path: Path, sample_size: int = DEFAULT_SAMPLE_SIZE) -> pd.DataFrame:
@@ -138,7 +141,9 @@ def environment_info() -> dict:
     }
 
 
-def save_test_predictions(test_df: pd.DataFrame, positive_probabilities: np.ndarray, output_path: Path) -> None:
+def save_test_predictions(
+    test_df: pd.DataFrame, positive_probabilities: np.ndarray, output_path: Path, neutral_margin: float = 0.0
+) -> None:
     """Save what the best model predicted for every test tweet (used by the error analysis)."""
     output = pd.DataFrame(
         {
@@ -147,6 +152,7 @@ def save_test_predictions(test_df: pd.DataFrame, positive_probabilities: np.ndar
             "target": test_df["target"].to_numpy(),
             "predicted": (positive_probabilities >= 0.5).astype(int),
             "positive_probability": np.round(positive_probabilities, 4),
+            "is_neutral": is_neutral(positive_probabilities, neutral_margin),
         }
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -161,6 +167,7 @@ def train(
     metrics_path: Path = METRICS_PATH,
     reports_dir: Path = REPORTS_DIR,
     best_params_path: Path | None = BEST_PARAMS_PATH,
+    target_accuracy: float = DEFAULT_TARGET_ACCURACY,
 ) -> dict:
     """Run the full training workflow and return the metrics summary."""
     df = load_dataset(data_path, sample_size)
@@ -174,25 +181,63 @@ def train(
     best_params = load_best_params(best_params_path)
     if best_params:
         print(f"Using tuned hyperparameters: {best_params}")
+    # A slice of the training data is kept aside to calibrate the probabilities afterwards.
+    x_fit, x_cal, y_fit, y_cal = train_test_split(
+        x_train, y_train, test_size=CALIBRATION_FRACTION, random_state=RANDOM_STATE, stratify=y_train
+    )
+
     models = build_models(best_params)
     results: dict[str, dict] = {}
     for name, model in models.items():
         print(f"Training {name} ...")
-        model.fit(x_train, y_train)
+        model.fit(x_fit, y_fit)
         results[name] = evaluate(model, x_test, y_test)
 
     best_name = select_best(results)
     summary = {
         "best_model": best_name,
-        "dataset": {"rows_used": len(df), "train_size": len(x_train), "test_size": len(x_test)},
+        "dataset": {
+            "rows_used": len(df),
+            "train_size": len(x_fit),
+            "calibration_size": len(x_cal),
+            "test_size": len(x_test),
+        },
         "settings": {"sample_size": sample_size, "test_fraction": test_size, "random_state": RANDOM_STATE},
         "hyperparameters": best_params or "defaults",
         "environment": environment_info(),
         "models": results,
     }
 
+    best_model = models[best_name]
+    calibration = select_calibration(best_model, x_cal, y_cal)
+    calibrated_model = calibration["calibrator"]
+
+    # Neutral margin: chosen on calibration data, never on the test set.
+    margin = choose_margin(calibration["holdout_y"], calibration["holdout_probability"], target_accuracy)
+    calibrated_model.neutral_margin = margin  # saved together with the model (see src/predict.py)
+
+    raw_probability = positive_probability(best_model, x_test.tolist())
+    probability = calibrated_model.predict_proba(x_test)[:, 1]
+    test_table = margin_tradeoff(y_test, probability, margins=[margin]).iloc[0]
+
+    summary["calibration"] = {
+        "method": calibration["method"],
+        "selection_scores": calibration["scores"],
+        "test": {
+            "uncalibrated": calibration_metrics(y_test, raw_probability),
+            "calibrated": calibration_metrics(y_test, probability),
+        },
+        "test_accuracy_calibrated": float(((probability >= 0.5).astype(int) == y_test.to_numpy()).mean()),
+    }
+    summary["neutral"] = {
+        "margin": margin,
+        "target_accuracy": target_accuracy,
+        "test_neutral_share": float(test_table["neutral_share"]),
+        "test_accuracy_on_decided": float(test_table["accuracy_on_decided"]),
+    }
+
     model_path.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(models[best_name], model_path)
+    joblib.dump(calibrated_model, model_path)
 
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
     metrics_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
@@ -202,9 +247,15 @@ def train(
         title=f"Confusion matrix - {best_name}",
         output_path=reports_dir / "confusion_matrix.png",
     )
-
-    probabilities = positive_probability(models[best_name], x_test.tolist())
-    save_test_predictions(df.loc[x_test.index], probabilities, reports_dir / "test_predictions.csv")
+    save_reliability_diagram(
+        {
+            "Before calibration": reliability_curve(y_test, raw_probability),
+            f"After calibration ({calibration['method']})": reliability_curve(y_test, probability),
+        },
+        reports_dir / "reliability_diagram.png",
+    )
+    margin_tradeoff(y_test, probability).to_csv(reports_dir / "neutral_tradeoff.csv", index=False)
+    save_test_predictions(df.loc[x_test.index], probability, reports_dir / "test_predictions.csv", margin)
     return summary
 
 
@@ -212,6 +263,14 @@ def print_summary(summary: dict) -> None:
     table = pd.DataFrame(summary["models"]).T[["accuracy", "precision", "recall", "f1"]]
     print("\n" + table.round(4).to_string())
     print(f"\nBest model: {summary['best_model']}")
+    cal = summary["calibration"]
+    print(f"Calibration ({cal['method']}), test set:")
+    print(pd.DataFrame(cal["test"]).T.round(4).to_string())
+    neutral = summary["neutral"]
+    print(
+        f"\nNeutral margin {neutral['margin']:.2f}: {neutral['test_neutral_share']:.1%} of tweets are Neutral; "
+        f"the others are {neutral['test_accuracy_on_decided']:.1%} accurate."
+    )
 
 
 def main() -> None:

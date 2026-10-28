@@ -85,3 +85,26 @@ def test_predict_batch_returns_503_when_model_is_missing(client_without_model):
     response = client_without_model.post("/predict/batch", json={"texts": ["I love this"]})
 
     assert response.status_code == 503
+
+
+def test_predict_can_return_neutral(tmp_path):
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.pipeline import Pipeline
+    import joblib
+
+    texts = ["love great happy", "hate awful sad", "wonderful amazing", "terrible worst bad"]
+    model = Pipeline([("tfidf", TfidfVectorizer()), ("clf", LogisticRegression())]).fit(texts, [1, 0, 1, 0])
+    model.neutral_margin = 0.49
+    path = tmp_path / "neutral.pkl"
+    joblib.dump(model, path)
+
+    app.dependency_overrides[get_model_path] = lambda: path
+    with TestClient(app) as test_client:
+        response = test_client.post("/predict", json={"text": "love"})
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["label"] == "Neutral"
+    assert 0.0 <= body["positive_probability"] <= 1.0
