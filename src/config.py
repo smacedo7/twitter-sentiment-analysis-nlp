@@ -14,6 +14,7 @@ DATA_PATH = DATA_DIR / "sentiment140.csv"
 # Best model found during training and its evaluation summary.
 MODEL_PATH = MODELS_DIR / "sentiment_classifier.pkl"
 METRICS_PATH = MODELS_DIR / "metrics.json"
+BEST_PARAMS_PATH = MODELS_DIR / "best_params.json"
 
 # Label mapping used everywhere (training, prediction, API, web app).
 LABELS = {0: "Negative", 1: "Positive"}

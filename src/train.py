@@ -34,7 +34,7 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
 
-from src.config import DATA_PATH, LABELS, METRICS_PATH, MODEL_PATH, RANDOM_STATE, REPORTS_DIR
+from src.config import BEST_PARAMS_PATH, DATA_PATH, LABELS, METRICS_PATH, MODEL_PATH, RANDOM_STATE, REPORTS_DIR
 from src.predict import positive_probability
 from src.preprocessing import preprocess_series
 
@@ -57,14 +57,36 @@ def load_dataset(data_path: Path, sample_size: int = DEFAULT_SAMPLE_SIZE) -> pd.
     return df[df["clean_text"] != ""].reset_index(drop=True)
 
 
-def build_models() -> dict[str, Pipeline]:
-    """Create one untrained pipeline per candidate model."""
+def load_best_params(path: Path | None = BEST_PARAMS_PATH) -> dict:
+    """Read the hyperparameters found by ``python -m src.tune`` (empty if the search was not run)."""
+    if path is None or not Path(path).exists():
+        return {}
+    return json.loads(Path(path).read_text(encoding="utf-8"))["best_params"]
+
+
+def build_models(params: dict | None = None) -> dict[str, Pipeline]:
+    """Create one untrained pipeline per candidate model.
+
+    ``params`` are the hyperparameters found by the search. The TF-IDF settings are shared
+    by the three models (so the comparison is fair); ``clf__C`` only applies to Logistic Regression.
+    """
+    params = params or {}
+    tfidf_settings = {
+        "ngram_range": (1, 2),
+        "min_df": 2,
+        "max_features": 100_000,
+        "sublinear_tf": True,
+    }
+    for key in tfidf_settings:
+        if f"tfidf__{key}" in params:
+            value = params[f"tfidf__{key}"]
+            tfidf_settings[key] = tuple(value) if key == "ngram_range" else value
 
     def tfidf() -> TfidfVectorizer:
-        return TfidfVectorizer(ngram_range=(1, 2), min_df=2, max_features=100_000, sublinear_tf=True)
+        return TfidfVectorizer(**tfidf_settings)
 
     classifiers = {
-        "Logistic Regression": LogisticRegression(max_iter=1000),
+        "Logistic Regression": LogisticRegression(max_iter=1000, C=params.get("clf__C", 1.0)),
         "Multinomial Naive Bayes": MultinomialNB(),
         "Linear SVM": LinearSVC(random_state=RANDOM_STATE),
     }
@@ -138,6 +160,7 @@ def train(
     model_path: Path = MODEL_PATH,
     metrics_path: Path = METRICS_PATH,
     reports_dir: Path = REPORTS_DIR,
+    best_params_path: Path | None = BEST_PARAMS_PATH,
 ) -> dict:
     """Run the full training workflow and return the metrics summary."""
     df = load_dataset(data_path, sample_size)
@@ -148,7 +171,10 @@ def train(
         df["clean_text"], df["target"], test_size=test_size, random_state=RANDOM_STATE, stratify=df["target"]
     )
 
-    models = build_models()
+    best_params = load_best_params(best_params_path)
+    if best_params:
+        print(f"Using tuned hyperparameters: {best_params}")
+    models = build_models(best_params)
     results: dict[str, dict] = {}
     for name, model in models.items():
         print(f"Training {name} ...")
@@ -160,6 +186,7 @@ def train(
         "best_model": best_name,
         "dataset": {"rows_used": len(df), "train_size": len(x_train), "test_size": len(x_test)},
         "settings": {"sample_size": sample_size, "test_fraction": test_size, "random_state": RANDOM_STATE},
+        "hyperparameters": best_params or "defaults",
         "environment": environment_info(),
         "models": results,
     }

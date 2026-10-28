@@ -74,3 +74,21 @@ def test_saved_model_can_predict(trained):
     predictions = model.predict(["love wonderful great day", "hate terrible awful worst"])
 
     assert predictions.tolist() == [1, 0]
+
+
+def test_build_models_applies_tuned_params():
+    params = {"tfidf__ngram_range": [1, 3], "tfidf__min_df": 5, "clf__C": 4.0}
+    models = build_models(params)
+
+    tfidf = models["Logistic Regression"].named_steps["tfidf"]
+    assert tfidf.ngram_range == (1, 3)
+    assert tfidf.min_df == 5
+    assert models["Logistic Regression"].named_steps["clf"].C == 4.0
+    assert models["Linear SVM"].named_steps["tfidf"].ngram_range == (1, 3)
+
+
+def test_load_best_params_missing_file_returns_empty(tmp_path):
+    from src.train import load_best_params
+
+    assert load_best_params(tmp_path / "nope.json") == {}
+    assert load_best_params(None) == {}
