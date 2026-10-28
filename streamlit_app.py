@@ -68,7 +68,7 @@ def render_single_tweet_tab() -> None:
 
     if st.button("Analyze", type="primary", key="analyze_single"):
         try:
-            result = predict_detailed(st.session_state.get("tweet_text", ""))
+            result = predict_detailed(st.session_state.get("tweet_text", ""), MODEL_PATH)
         except ValueError as error:
             st.warning(str(error))
         else:
@@ -109,7 +109,7 @@ def render_batch_tab() -> None:
             st.warning(f"Only the first {MAX_BATCH_ROWS:,} rows will be analyzed.")
         # Results are kept in session_state because Streamlit reruns the script on every
         # interaction (for example the download button), which would otherwise erase them.
-        st.session_state["batch_results"] = predict_dataframe(df.head(MAX_BATCH_ROWS), text_column)
+        st.session_state["batch_results"] = predict_dataframe(df.head(MAX_BATCH_ROWS), text_column, MODEL_PATH)
 
     results = st.session_state.get("batch_results")
     if results is None:
