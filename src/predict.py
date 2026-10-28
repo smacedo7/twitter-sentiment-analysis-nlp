@@ -35,7 +35,7 @@ def load_model(model_path: Path = MODEL_PATH) -> Pipeline:
     return joblib.load(model_path)
 
 
-def _positive_probability(model: Pipeline, cleaned_texts: list[str]) -> np.ndarray:
+def positive_probability(model: Pipeline, cleaned_texts: list[str]) -> np.ndarray:
     """Return, for each text, how likely it is to be positive (a number between 0 and 1).
 
     Logistic Regression and Naive Bayes provide real probabilities. Linear SVM does not,
@@ -68,7 +68,7 @@ def predict_batch(texts: list[str], model_path: Path = MODEL_PATH) -> list[dict]
 
     results: list[dict] = [{"label": None, "confidence": None} for _ in texts]
     if valid_positions:
-        probabilities = _positive_probability(model, [cleaned[i] for i in valid_positions])
+        probabilities = positive_probability(model, [cleaned[i] for i in valid_positions])
         for position, probability in zip(valid_positions, probabilities):
             results[position] = _build_result(float(probability))
     return results

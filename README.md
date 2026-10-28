@@ -68,7 +68,8 @@ twitter-sentiment-analysis-nlp/
 │   ├── preprocessing.py          # text cleaning pipeline
 │   ├── train.py                  # trains, compares and saves the models
 │   ├── predict.py                # prediction functions and CLI
-│   └── batch.py                  # prediction for whole tables (used by the web app)
+│   ├── batch.py                  # prediction for whole tables (used by the web app)
+│   └── error_analysis.py         # studies where the model makes mistakes
 ├── models/
 │   ├── sentiment_classifier.pkl  # created by src/train.py (not versioned)
 │   └── metrics.json              # created by src/train.py
@@ -173,7 +174,15 @@ python -m src.train                    # 200,000-tweet sample (fast)
 python -m src.train --sample-size 0    # full dataset (slower)
 ```
 
-### 4. Predict
+### 4. Analyze the mistakes
+
+```bash
+python -m src.error_analysis
+```
+
+Writes `reports/error_analysis.md` (error rate by tweet length, by confidence and by word, plus the most confident mistakes) and `reports/error_examples.csv`. @handles and links are masked.
+
+### 5. Predict
 
 ```python
 from src.predict import predict_sentiment

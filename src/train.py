@@ -17,11 +17,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
 from pathlib import Path
 
 import joblib
+import numpy as np
 import pandas as pd
 import seaborn as sns
+import sklearn
 from matplotlib.figure import Figure
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
@@ -32,6 +35,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
 
 from src.config import DATA_PATH, LABELS, METRICS_PATH, MODEL_PATH, RANDOM_STATE, REPORTS_DIR
+from src.predict import positive_probability
 from src.preprocessing import preprocess_series
 
 DEFAULT_SAMPLE_SIZE = 200_000
@@ -98,6 +102,35 @@ def save_confusion_matrix(matrix: list[list[int]], title: str, output_path: Path
     figure.savefig(output_path, dpi=150)
 
 
+def environment_info() -> dict:
+    """Library versions used for training.
+
+    A saved model should be loaded with the same scikit-learn version that created it,
+    so this information is stored next to the metrics.
+    """
+    return {
+        "python": platform.python_version(),
+        "scikit-learn": sklearn.__version__,
+        "pandas": pd.__version__,
+        "numpy": np.__version__,
+    }
+
+
+def save_test_predictions(test_df: pd.DataFrame, positive_probabilities: np.ndarray, output_path: Path) -> None:
+    """Save what the best model predicted for every test tweet (used by the error analysis)."""
+    output = pd.DataFrame(
+        {
+            "text": test_df["text"].to_numpy(),
+            "clean_text": test_df["clean_text"].to_numpy(),
+            "target": test_df["target"].to_numpy(),
+            "predicted": (positive_probabilities >= 0.5).astype(int),
+            "positive_probability": np.round(positive_probabilities, 4),
+        }
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output.to_csv(output_path, index=False)
+
+
 def train(
     data_path: Path = DATA_PATH,
     sample_size: int = DEFAULT_SAMPLE_SIZE,
@@ -126,6 +159,8 @@ def train(
     summary = {
         "best_model": best_name,
         "dataset": {"rows_used": len(df), "train_size": len(x_train), "test_size": len(x_test)},
+        "settings": {"sample_size": sample_size, "test_fraction": test_size, "random_state": RANDOM_STATE},
+        "environment": environment_info(),
         "models": results,
     }
 
@@ -140,6 +175,9 @@ def train(
         title=f"Confusion matrix - {best_name}",
         output_path=reports_dir / "confusion_matrix.png",
     )
+
+    probabilities = positive_probability(models[best_name], x_test.tolist())
+    save_test_predictions(df.loc[x_test.index], probabilities, reports_dir / "test_predictions.csv")
     return summary
 
 
