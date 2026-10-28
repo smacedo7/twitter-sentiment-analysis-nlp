@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("streamlit")
@@ -5,11 +7,13 @@ from streamlit.testing.v1 import AppTest  # noqa: E402
 
 import src.config  # noqa: E402
 
+APP_PATH = Path(__file__).resolve().parent.parent / "streamlit_app.py"
+
 
 @pytest.fixture
 def app(model_path, monkeypatch):
     monkeypatch.setattr(src.config, "MODEL_PATH", model_path)
-    return AppTest.from_file("streamlit_app.py", default_timeout=30)
+    return AppTest.from_file(str(APP_PATH), default_timeout=30)
 
 
 def test_app_starts_without_errors(app):
