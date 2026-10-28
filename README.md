@@ -49,6 +49,17 @@ Sentiment140 only has Positive and Negative tweets, so a Neutral class cannot be
 
 The margin was chosen on the calibration data as the smallest one for which the decided tweets reach 85% accuracy. On the test set, **17.2% of the tweets are Neutral and the remaining ones are classified with 85.4% accuracy** (compared with 80.6% when every tweet must be Positive or Negative). The whole trade-off curve is in `reports/neutral_tradeoff.csv`.
 
+### Comparison with a pretrained transformer
+
+`python -m src.transformer_baseline` compares the model above with DistilBERT (`distilbert-base-uncased-finetuned-sst-2-english`), a pretrained transformer used as is, **without any training on tweets**, on the same random sample of 2,000 test tweets:
+
+| Model | Accuracy | Precision | Recall | F1-score |
+|-------|---------:|----------:|-------:|---------:|
+| TF-IDF + Logistic Regression | 80.8% | 80.6% | 80.7% | 80.7% |
+| DistilBERT (not fine-tuned) | 71.1% | 77.4% | 59.0% | 66.9% |
+
+The simpler model wins by almost 10 points. This does not mean that transformers are worse: DistilBERT was trained to classify **movie reviews**, so it is used here outside its domain, and Sentiment140 labels come from emoticons, which the transformer never saw. It is cautious with tweets and labels many positive ones as negative (recall of 59%). A transformer fine-tuned on Sentiment140 would probably do better, but that was not tested. With 2,000 tweets the margin of error is about 2 percentage points. The results are in `reports/transformer_comparison.json`.
+
 ### What the error analysis showed
 
 The full report is in [`reports/error_analysis.md`](reports/error_analysis.md). The main findings:
@@ -64,7 +75,7 @@ The full report is in [`reports/error_analysis.md`](reports/error_analysis.md). 
 - Neutral does not mean "factual". A plain statement like "The meeting is at 3pm tomorrow" is classified as Negative (66% confidence): the training tweets contain no neutral examples, so the model only knows that some texts are more uncertain than others.
 - Sentiment140 has only two classes, so Neutral is an "uncertain" zone, not a learned class; with real neutral examples (for example from another dataset) the result could be better.
 - The data is from 2009: slang and topics have changed since then.
-- A pretrained transformer comparison is implemented in `src/transformer_baseline.py`, but it has not been run yet, so no result is reported here.
+- Only a pretrained transformer used as is was compared; fine-tuning one on Sentiment140 was not tried.
 
 ## Features
 
@@ -376,7 +387,7 @@ The tests use a small synthetic dataset (`tests/fixtures/sample_tweets.csv`), so
 
 ## Future Improvements
 
-- Fine-tune a transformer model such as BERT on Sentiment140
+- Fine-tune a transformer model such as BERT on Sentiment140 (the non-fine-tuned DistilBERT scored 71.1%)
 - Integrate sentiment monitoring dashboards
 
 ## Author
