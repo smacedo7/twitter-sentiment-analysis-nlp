@@ -12,31 +12,57 @@ It covers the whole life of a machine learning project: data preparation, model 
 
 ## Results
 
-Trained on the full Sentiment140 dataset (1,590,670 tweets after cleaning; 80% for training, 20% for testing, stratified, `random_state=42`):
+Trained on the full Sentiment140 dataset (1,590,670 tweets after cleaning). The split is stratified with `random_state=42`: 20% of the tweets (318,134) form the test set that is never used for training, tuning or calibration. Of the remaining 80%, 1,145,282 train the models and 127,254 are kept aside to calibrate the probabilities.
 
 | Model | Accuracy | Precision | Recall | F1-score |
 |-------|---------:|----------:|-------:|---------:|
-| **Logistic Regression** (selected) | **80.6%** | 79.8% | 81.9% | **80.9%** |
-| Linear SVM | 80.0% | 79.1% | 81.5% | 80.3% |
-| Multinomial Naive Bayes | 78.7% | 78.7% | 78.6% | 78.7% |
+| **Logistic Regression** (selected) | **80.5%** | 79.6% | 82.1% | **80.8%** |
+| Linear SVM | 79.9% | 78.9% | 81.4% | 80.1% |
+| Multinomial Naive Bayes | 78.6% | 78.6% | 78.6% | 78.6% |
 
 All models use the same TF-IDF features (unigrams and bigrams, up to 100,000 terms). Results are saved in `models/metrics.json`, and the confusion matrix is in `reports/confusion_matrix.png`.
 
 ![Confusion matrix](reports/confusion_matrix.png)
 
+### Hyperparameter tuning
+
+`python -m src.tune` searched 30 random combinations of TF-IDF and Logistic Regression settings (n-gram range, minimum document frequency, vocabulary size, sublinear TF, regularization strength `C`) with 3-fold cross-validation on 600,000 training tweets. The test set was not used.
+
+The best combination found reached an F1-score of 0.7995, while the original settings reached 0.7997 on the same folds. **The search did not beat the original settings**, so they were kept (see `reports/tuning_results.csv`: the top combinations are within a few thousandths of each other). In this problem, more data helps more than more tuning.
+
+### Probability calibration
+
+A calibrated model's probabilities mean what they say: among tweets with "70% positive", about 70% really are. The probabilities were calibrated with isotonic regression, learned on the held-out calibration slice (the method was chosen by log loss on data it was not fitted on).
+
+| Test set | Brier score | Log loss | ECE |
+|----------|------------:|---------:|----:|
+| Before calibration | 0.1376 | 0.4309 | 0.0179 |
+| After calibration | 0.1372 | 0.4283 | 0.0030 |
+
+The Expected Calibration Error (ECE) dropped from 1.8% to 0.3%. Logistic Regression was already well calibrated, so the gain in Brier score and log loss is small, but the confidence shown to users is now reliable. The curve is in `reports/reliability_diagram.png`.
+
+![Reliability diagram](reports/reliability_diagram.png)
+
+### Neutral category
+
+Sentiment140 only has Positive and Negative tweets, so a Neutral class cannot be learned from labeled examples. Instead, the model answers **Neutral** when its calibrated probability of "Positive" is within 0.15 of 50% (that is, between 35% and 65%). It means "mixed or ambiguous", not "neutral" in the sense of a human annotator.
+
+The margin was chosen on the calibration data as the smallest one for which the decided tweets reach 85% accuracy. On the test set, **17.2% of the tweets are Neutral and the remaining ones are classified with 85.4% accuracy** (compared with 80.6% when every tweet must be Positive or Negative). The whole trade-off curve is in `reports/neutral_tradeoff.csv`.
+
 ### What the error analysis showed
 
 The full report is in [`reports/error_analysis.md`](reports/error_analysis.md). The main findings:
 
-- **The model knows when it is unsure.** When its confidence is above 90%, it is wrong only 4.9% of the time. When it is between 50% and 60%, it is wrong 44.2% of the time. The confidence shown in the API and in the web interface is therefore a useful signal.
-- **Longer tweets are harder.** The error rate grows from 16.8% (1-3 words) to 23.8% (13+ words after cleaning), probably because long tweets mix positive and negative ideas.
+- **The model knows when it is unsure.** When its confidence is above 90%, it is wrong only 5.2% of the time. When it is between 50% and 60%, it is wrong 44.5% of the time. This is what the Neutral category uses. The confidence shown in the API and in the web interface is therefore a useful signal.
+- **Longer tweets are harder.** The error rate grows from 16.8% (1-3 words) to 23.7% (13+ words after cleaning), probably because long tweets mix positive and negative ideas.
 - **Many "mistakes" are label noise.** Sentiment140 labels were assigned automatically from emoticons, not by people. Among the most confident mistakes are tweets like "I miss you", which the model reads as negative, but which were labeled positive because they came with a smiling emoticon. That is a limit of the dataset, not only of the model.
-- **Errors are balanced.** 32,956 negative tweets were predicted as positive and 28,695 positive tweets as negative, so the model is not strongly biased towards one class.
+- **Errors are balanced.** 32,219 negative tweets were predicted as positive and 29,630 positive tweets as negative, so the model is not strongly biased towards one class.
 
 ### Limitations
 
 - Sarcasm and irony are hard for a bag-of-words model ("Great, another Monday..." is classified as positive).
-- Sentiment140 has only two classes, so there is no neutral sentiment.
+- Neutral does not mean "factual". A plain statement like "The meeting is at 3pm tomorrow" is classified as Negative (66% confidence): the training tweets contain no neutral examples, so the model only knows that some texts are more uncertain than others.
+- Sentiment140 has only two classes, so Neutral is an "uncertain" zone, not a learned class; with real neutral examples (for example from another dataset) the result could be better.
 - The data is from 2009: slang and topics have changed since then.
 - A pretrained transformer comparison is implemented in `src/transformer_baseline.py`, but it has not been run yet, so no result is reported here.
 
@@ -47,6 +73,9 @@ The full report is in [`reports/error_analysis.md`](reports/error_analysis.md). 
 - Exploratory Data Analysis (EDA)
 - Feature extraction with TF-IDF
 - Sentiment classification with machine learning models
+- Hyperparameter search with cross-validation
+- Probability calibration (reliability diagram, Brier score, ECE)
+- Neutral category based on calibrated uncertainty
 - Model evaluation using accuracy, precision, recall, F1-score, and confusion matrix
 - Interactive prediction for custom tweets
 - REST API for real-time predictions (FastAPI)
@@ -99,13 +128,20 @@ twitter-sentiment-analysis-nlp/
 │   ├── train.py                  # trains, compares and saves the models
 │   ├── predict.py                # prediction functions and CLI
 │   ├── batch.py                  # prediction for whole tables (used by the web app)
+│   ├── tune.py                   # hyperparameter search
+│   ├── calibration.py            # probability calibration and metrics
+│   ├── neutral.py                # Neutral category (uncertainty margin)
 │   ├── error_analysis.py         # studies where the model makes mistakes
 │   └── transformer_baseline.py   # compares the classic model with DistilBERT
 ├── models/
 │   ├── sentiment_classifier.pkl  # trained model (versioned so the demo works)
+│   ├── best_params.json          # created by src/tune.py
 │   └── metrics.json              # created by src/train.py
 ├── reports/
 │   ├── confusion_matrix.png      # created by src/train.py
+│   ├── reliability_diagram.png   # calibration curve
+│   ├── neutral_tradeoff.csv      # Neutral margin vs accuracy
+│   ├── tuning_results.csv        # every combination tried by src/tune.py
 │   ├── error_analysis.md         # created by src/error_analysis.py
 │   └── error_examples.csv        # most confident mistakes (handles masked)
 ├── tests/
@@ -204,14 +240,22 @@ python -m src.download_data --raw-csv path/to/training.1600000.processed.noemoti
 jupyter notebook notebooks/sentiment_analysis.ipynb
 ```
 
-### 3. Train the models
+### 3. Tune the hyperparameters (optional)
+
+```bash
+python -m src.tune                      # 200,000-tweet sample, 20 combinations
+```
+
+Saves `models/best_params.json`, which `src.train` uses automatically.
+
+### 4. Train the models
 
 ```bash
 python -m src.train                    # 200,000-tweet sample (fast)
 python -m src.train --sample-size 0    # full dataset (slower)
 ```
 
-### 4. Analyze the mistakes
+### 5. Analyze the mistakes
 
 ```bash
 python -m src.error_analysis
@@ -219,7 +263,7 @@ python -m src.error_analysis
 
 Writes `reports/error_analysis.md` (error rate by tweet length, by confidence and by word, plus the most confident mistakes) and `reports/error_examples.csv`. @handles and links are masked.
 
-### 5. Compare with a transformer (optional)
+### 6. Compare with a transformer (optional)
 
 ```bash
 pip install -r requirements-transformers.txt
@@ -228,7 +272,7 @@ python -m src.transformer_baseline
 
 Runs a pretrained DistilBERT model on the same test tweets as the classic model and saves `reports/transformer_comparison.json`.
 
-### 6. Predict
+### 7. Predict
 
 ```python
 from src.predict import predict_sentiment
@@ -274,8 +318,10 @@ curl -X POST http://127.0.0.1:8000/predict \
 ```
 
 ```json
-{"label": "Positive", "confidence": 0.93}
+{"label": "Positive", "confidence": 0.95, "positive_probability": 0.95}
 ```
+
+`label` is `Positive`, `Negative` or `Neutral` (the model is not sure). `positive_probability` is the calibrated probability that the tweet is positive.
 
 Batch prediction:
 
@@ -288,8 +334,8 @@ curl -X POST http://127.0.0.1:8000/predict/batch \
 ```json
 {
   "predictions": [
-    {"label": "Positive", "confidence": 0.91},
-    {"label": "Negative", "confidence": 0.88}
+    {"label": "Positive", "confidence": 0.91, "positive_probability": 0.91},
+    {"label": "Negative", "confidence": 0.88, "positive_probability": 0.12}
   ]
 }
 ```
@@ -302,7 +348,7 @@ Texts with no analyzable words (only links, mentions or symbols) return `422` on
 streamlit run streamlit_app.py
 ```
 
-- **Single tweet**: type a tweet (or pick an example) and see the predicted sentiment with its confidence.
+- **Single tweet**: type a tweet (or pick an example) and see the predicted sentiment (Positive, Negative or Neutral) with the probability of being positive.
 - **CSV file**: upload a file with a column of tweets, see the sentiment counts and download the results.
 
 ## Docker
@@ -330,7 +376,6 @@ The tests use a small synthetic dataset (`tests/fixtures/sample_tweets.csv`), so
 
 ## Future Improvements
 
-- Add neutral sentiment classification
 - Fine-tune a transformer model such as BERT on Sentiment140
 - Integrate sentiment monitoring dashboards
 

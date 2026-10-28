@@ -1,0 +1,29 @@
+{
+  "best_params": {
+    "tfidf__ngram_range": [
+      1,
+      2
+    ],
+    "tfidf__min_df": 2,
+    "tfidf__max_features": 100000,
+    "tfidf__sublinear_tf": true,
+    "clf__C": 1.0
+  },
+  "best_cv_f1": 0.7995481429776063,
+  "baseline_cv_f1": 0.7997405769305601,
+  "tuning_sample_size": 600000,
+  "combinations_tried": 30,
+  "cv_folds": 3,
+  "minutes": 15.0,
+  "best_searched_params": {
+    "clf__C": 1.1189657849413857,
+    "tfidf__max_features": 50000,
+    "tfidf__min_df": 5,
+    "tfidf__ngram_range": [
+      1,
+      3
+    ],
+    "tfidf__sublinear_tf": true
+  },
+  "improved_over_baseline": false
+}

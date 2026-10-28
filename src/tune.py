@@ -27,7 +27,7 @@ import pandas as pd
 from scipy.stats import loguniform
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import RandomizedSearchCV, train_test_split
+from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold, cross_val_score, train_test_split
 from sklearn.pipeline import Pipeline
 
 from src.config import BEST_PARAMS_PATH, DATA_PATH, RANDOM_STATE, REPORTS_DIR
@@ -49,6 +49,25 @@ def base_pipeline() -> Pipeline:
             ("clf", LogisticRegression(max_iter=1000)),
         ]
     )
+
+
+BASELINE_PARAMS = {
+    "tfidf__ngram_range": [1, 2],
+    "tfidf__min_df": 2,
+    "tfidf__max_features": 100_000,
+    "tfidf__sublinear_tf": True,
+    "clf__C": 1.0,
+}
+
+
+def choose_final_params(best_params: dict, best_score: float, baseline_score: float) -> tuple[dict, bool]:
+    """Keep the searched settings only if they beat the original ones; otherwise keep the originals.
+
+    Returns the chosen parameters and whether the search really improved the score.
+    """
+    if best_score > baseline_score:
+        return best_params, True
+    return dict(BASELINE_PARAMS), False
 
 
 def run_search(
@@ -86,15 +105,26 @@ def run_search(
     search.fit(x_train, y_train)
     minutes = (time.perf_counter() - started) / 60
 
+    # Reference point: the settings used before the search, scored on the very same folds.
+    baseline = base_pipeline().set_params(
+        tfidf__ngram_range=(1, 2), tfidf__min_df=2, tfidf__max_features=100_000, tfidf__sublinear_tf=True, clf__C=1.0
+    )
+    searched_folds = StratifiedKFold(n_splits=cv)  # same splitter RandomizedSearchCV uses for classifiers
+    baseline_score = float(cross_val_score(baseline, x_train, y_train, scoring="f1", cv=searched_folds, n_jobs=n_jobs).mean())
+
     results = pd.DataFrame(search.cv_results_)
     columns = [c for c in results.columns if c.startswith("param_")] + ["mean_test_score", "std_test_score", "rank_test_score"]
     reports_dir.mkdir(parents=True, exist_ok=True)
     results[columns].sort_values("rank_test_score").to_csv(reports_dir / "tuning_results.csv", index=False)
 
-    best = {key: _to_json(value) for key, value in search.best_params_.items()}
+    searched = {key: _to_json(value) for key, value in search.best_params_.items()}
+    best, improved = choose_final_params(searched, float(search.best_score_), baseline_score)
     summary = {
         "best_params": best,
+        "improved_over_baseline": improved,
+        "best_searched_params": searched,
         "best_cv_f1": float(search.best_score_),
+        "baseline_cv_f1": baseline_score,
         "tuning_sample_size": int(len(x_train)),
         "combinations_tried": int(n_iter),
         "cv_folds": cv,
@@ -122,6 +152,8 @@ def main() -> None:
 
     summary = run_search(args.data, args.sample_size, args.n_iter)
     print(json.dumps(summary, indent=2))
+    if not summary["improved_over_baseline"]:
+        print("\nNo combination beat the original settings, so they were kept.")
     print(f"\nSaved to {BEST_PARAMS_PATH}")
 
 

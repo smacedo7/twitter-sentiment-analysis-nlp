@@ -2,13 +2,24 @@
   "best_model": "Logistic Regression",
   "dataset": {
     "rows_used": 1590670,
-    "train_size": 1272536,
+    "train_size": 1145282,
+    "calibration_size": 127254,
     "test_size": 318134
   },
   "settings": {
     "sample_size": 0,
     "test_fraction": 0.2,
     "random_state": 42
+  },
+  "hyperparameters": {
+    "tfidf__ngram_range": [
+      1,
+      2
+    ],
+    "tfidf__min_df": 2,
+    "tfidf__max_features": 100000,
+    "tfidf__sublinear_tf": true,
+    "clf__C": 1.0
   },
   "environment": {
     "python": "3.13.18",
@@ -18,52 +29,86 @@
   },
   "models": {
     "Logistic Regression": {
-      "accuracy": 0.8062105905058875,
-      "precision": 0.7980983654765114,
-      "recall": 0.8194908377210365,
-      "f1": 0.8086531448346498,
+      "accuracy": 0.8053964681549284,
+      "precision": 0.7961420402882791,
+      "recall": 0.820692344952097,
+      "f1": 0.8082308044951616,
       "confusion_matrix": [
         [
-          126211,
-          32956
+          125761,
+          33406
         ],
         [
-          28695,
-          130272
+          28504,
+          130463
         ]
       ]
     },
     "Multinomial Naive Bayes": {
-      "accuracy": 0.7868288205598899,
-      "precision": 0.7869962216624685,
-      "recall": 0.7861694565538759,
-      "f1": 0.786582621858154,
+      "accuracy": 0.7862127279699749,
+      "precision": 0.7863538478975405,
+      "recall": 0.785597010700334,
+      "f1": 0.7859752471041378,
       "confusion_matrix": [
         [
-          125342,
-          33825
+          125237,
+          33930
         ],
         [
-          33992,
-          124975
+          34083,
+          124884
         ]
       ]
     },
     "Linear SVM": {
-      "accuracy": 0.7998862114706382,
-      "precision": 0.790883785664579,
-      "recall": 0.8150182113268791,
-      "f1": 0.8027696454296204,
+      "accuracy": 0.7985000031433296,
+      "precision": 0.7894688661454805,
+      "recall": 0.8137537979580668,
+      "f1": 0.8014274031670507,
       "confusion_matrix": [
         [
-          124910,
-          34257
+          124670,
+          34497
         ],
         [
-          29406,
-          129561
+          29607,
+          129360
         ]
       ]
     }
+  },
+  "calibration": {
+    "method": "isotonic",
+    "selection_scores": {
+      "sigmoid": {
+        "brier": 0.13937659948558406,
+        "log_loss": 0.4366020342873394,
+        "ece": 0.014284876117461107
+      },
+      "isotonic": {
+        "brier": 0.1392276490560469,
+        "log_loss": 0.43482906283683936,
+        "ece": 0.007185863351057066
+      }
+    },
+    "test": {
+      "uncalibrated": {
+        "brier": 0.13755392033601682,
+        "log_loss": 0.43088306230427187,
+        "ece": 0.017929390239868292
+      },
+      "calibrated": {
+        "brier": 0.13715896902738492,
+        "log_loss": 0.42826362015375735,
+        "ece": 0.002955525190114835
+      }
+    },
+    "test_accuracy_calibrated": 0.8055882112568917
+  },
+  "neutral": {
+    "margin": 0.15,
+    "target_accuracy": 0.85,
+    "test_neutral_share": 0.17182382266592064,
+    "test_accuracy_on_decided": 0.8537751782928672
   }
 }

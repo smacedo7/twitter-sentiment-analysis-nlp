@@ -93,11 +93,41 @@ def confident_mistakes(df: pd.DataFrame, top: int = TOP_EXAMPLES) -> pd.DataFram
     ).reset_index(drop=True)
 
 
+def _neutral_lines(df: pd.DataFrame) -> list[str]:
+    summary = neutral_summary(df)
+    if summary is None:
+        return []
+    return [
+        "## The Neutral zone",
+        "",
+        f"The model answers **Neutral** for {summary['neutral_share']:.1%} of the test tweets. "
+        f"If it had been forced to choose a side for those tweets, it would have been wrong "
+        f"{summary['error_rate_if_forced']:.1%} of the time. "
+        f"On the other tweets, accuracy rises to **{summary['accuracy_on_decided']:.1%}**.",
+        "",
+    ]
+
+
 def _markdown_table(table: pd.DataFrame, index_name: str) -> str:
     lines = [f"| {index_name} | Tweets | Error rate |", "|---|---:|---:|"]
     for name, row in table.iterrows():
         lines.append(f"| {name} | {int(row['tweets']):,} | {row['error_rate']:.1%} |")
     return "\n".join(lines)
+
+
+def neutral_summary(df: pd.DataFrame) -> dict | None:
+    """How the Neutral zone changes the picture (None for files made before Neutral existed)."""
+    if "is_neutral" not in df.columns:
+        return None
+    neutral = df["is_neutral"].astype(str).str.lower() == "true"
+    decided = df[~neutral]
+    if neutral.sum() == 0 or decided.empty:
+        return None
+    return {
+        "neutral_share": float(neutral.mean()),
+        "error_rate_if_forced": float(df[neutral]["is_error"].mean()),
+        "accuracy_on_decided": float(1 - decided["is_error"].mean()),
+    }
 
 
 def build_report(df: pd.DataFrame) -> str:
@@ -117,6 +147,7 @@ def build_report(df: pd.DataFrame) -> str:
         f"- Negative tweets predicted as Positive: **{by_class['false_positives']:,}**",
         f"- Positive tweets predicted as Negative: **{by_class['false_negatives']:,}**",
         "",
+        *_neutral_lines(df),
         "## Error rate by tweet length (words after cleaning)",
         "",
         _markdown_table(error_rates_by_length(df), "Words"),
