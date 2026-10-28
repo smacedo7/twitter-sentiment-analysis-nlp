@@ -18,6 +18,8 @@ data/*
 !data/.gitkeep
 models/*.pkl
 models/*.joblib
+# The final model is versioned on purpose, so the online demo works.
+!models/sentiment_classifier.pkl
 
 # OS / editor
 .DS_Store

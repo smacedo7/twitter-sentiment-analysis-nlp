@@ -76,9 +76,13 @@ twitter-sentiment-analysis-nlp/
 ├── reports/
 │   └── confusion_matrix.png      # created by src/train.py
 ├── tests/
+├── Dockerfile
+├── render.yaml                   # Render deploy configuration
+├── .github/workflows/ci.yml      # tests + Docker build on every push
 ├── streamlit_app.py              # web interface
 ├── requirements.txt
 ├── requirements-dev.txt
+├── requirements-deploy.txt       # minimal dependencies used by Docker
 └── README.md
 ```
 
@@ -258,6 +262,21 @@ streamlit run streamlit_app.py
 
 - **Single tweet**: type a tweet (or pick an example) and see the predicted sentiment with its confidence.
 - **CSV file**: upload a file with a column of tweets, see the sentiment counts and download the results.
+
+## Docker
+
+```bash
+docker build -t sentiment-api .
+docker run -p 8000:8000 sentiment-api
+```
+
+The API is then available at <http://localhost:8000/docs>. To run the web interface from the same image:
+
+```bash
+docker run -p 8501:8501 sentiment-api streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0
+```
+
+The image needs the trained model in `models/` (see *Train the models*).
 
 ## Tests
 
