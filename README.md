@@ -1,5 +1,7 @@
 # Twitter Sentiment Analysis with NLP
 
+**[Live demo](https://twitter-sentiment-samuel.streamlit.app)** · Python · scikit-learn · FastAPI · Streamlit · Docker · GitHub Actions
+
 An end-to-end Natural Language Processing project for classifying the sentiment of tweets using the Sentiment140 dataset.
 
 The project applies text preprocessing and machine learning techniques to predict whether a tweet expresses a negative or positive sentiment, and exposes the trained model through a REST API and a web interface.
@@ -354,6 +356,8 @@ curl -X POST http://127.0.0.1:8000/predict/batch \
 Texts with no analyzable words (only links, mentions or symbols) return `422` on `/predict` and `null` values on `/predict/batch`. If the model has not been trained yet, the prediction endpoints return `503`.
 
 ## Web Interface
+
+Online version: <https://twitter-sentiment-samuel.streamlit.app>. To run it locally:
 
 ```bash
 streamlit run streamlit_app.py
